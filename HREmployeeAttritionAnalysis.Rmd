@@ -1,0 +1,601 @@
+---
+title: "HR Employee Attrition Analysis"
+output:
+  word_document: default
+  html_document: default
+date: "2023-04-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Introduction 
+
+The utilization of analytics in human resource (HR) departments has been on the rise, as it enables effective hiring and workforce management. Similar to other departments such as finance and marketing, HR departments also require unique analytics solutions tailored to their domain. Typically, HR departments possess smaller hrdatasets, mixed hrdata comprising qualitative and quantitative variables, and have a preference for hrdata interpretation over pure prediction. This is especially significant as people hrdata is involved, i.e., hrdata collected on individuals. Therefore, HR managers require models that provide interpretive insights for decision-making, rather than black box models. Consequently, exploratory analyses that aid in extracting insights from disorganized hrdata can be highly beneficial for HR departments.
+
+The IBM hrdataset includes various employee characteristics and their attrition status, presenting a prime opportunity to demonstrate useful approaches to mixed hrdata and exploratory analysis in HR.
+
+```{r}
+install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+install.packages('cowplot', repos = "http://cran.us.r-project.org")
+install.packages("caret", repos = "http://cran.us.r-project.org")
+install.packages("caTools", repos = "http://cran.us.r-project.org")
+install.packages("MLmetrics", repos = "http://cran.us.r-project.org")
+library(MLmetrics)
+library(caTools)
+library(caret)
+library(tidyverse)
+library(ggplot2)
+library(ggcorrplot)
+library(caret)
+library(rpart)
+library(pROC)
+library(cowplot)
+library(caret)
+library(glmnet)
+library(car)
+library(leaps)
+library(MASS)
+```
+```{r}
+hrdata <- read.csv("/Users/cerenengin/Desktop/ULL Courses/INFX 512 - Data Analysis and Visuilization/Semester Project/WA_Fn-UseC_-HR-Employee-Attrition.csv")
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+head(hrdata)
+```
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+colnames(hrdata)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+hrdata[sapply(hrdata, is.character)] <- lapply(hrdata[sapply(hrdata, is.character)], as.factor)
+hrdata$RelationshipSatisfaction <- factor(hrdata$RelationshipSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$Education <- factor(hrdata$Education, levels = c(1, 2, 3, 4, 5), labels = c("Below College", "College", "Bachelor", "Master", "Doctor"))
+hrdata$JobInvolvement <- factor(hrdata$JobInvolvement, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$EnvironmentSatisfaction <- factor(hrdata$EnvironmentSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$JobSatisfaction <- factor(hrdata$JobSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$PerformanceRating <- factor(hrdata$PerformanceRating, levels = c(1, 2, 3, 4), labels = c("Low", "Good", "Excellent", "Outstanding"))
+hrdata$WorkLifeBalance <- factor(hrdata$WorkLifeBalance, levels = c(1, 2, 3, 4), labels = c("Bad", "Good", "Better", "Best"))
+hrdata$JobLevel <- as.factor(hrdata$JobLevel)
+hrdata$StockOptionLevel <- as.factor(hrdata$StockOptionLevel)
+hrdata[sapply(hrdata, is.integer)] <- lapply(hrdata[sapply(hrdata, is.integer)], as.numeric)
+str(hrdata)
+```
+
+BURAYA YAZI YAZ!!
+
+
+```{r}
+hrdata.NUM <- select_if(hrdata, is.numeric)
+cor(hrdata.NUM)
+```
+
+!!BURAYA YAZI YAZ!!
+yazzzzzz
+
+```{r}
+corr <- round(cor(hrdata.NUM), 2)
+ggcorrplot(corr, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 2, 
+           method="square", 
+           colors = c("green", "white", "red"), 
+           title="Correlation Diagram for Different Variables", 
+           ggtheme=theme_minimal())
+```
+
+The cor() function is used to calculate the correlations between the numeric variables. The resulting output is a correlation matrix that shows the correlation coefficients between each pair of variables. Then, correlations visualized by using ggcorrplot().
+
+Looking at the output, we can see that some variables are positively correlated with each other, while others are negatively correlated or have very weak correlations.
+
+For example, the correlation between age and total working years is 0.68, indicating a moderate positive correlation between these two variables. Similarly, monthly income is positively correlated with age and total working years, with correlation coefficients of 0.5 and 0.77 respectively.
+
+On the other hand, distance from home and percent salary hike have very weak correlations with most other variables, indicating that they may not be strongly related to the other variables in the hrdataset.
+
+The highest correlations in the correlation matrix are:
+
+0.7729 between MonthlyIncome and TotalWorkingYears, which indicates a strong positive correlation between an employee's monthly income and the number of years they have worked.
+0.6804 between Age and TotalWorkingYears, which indicates a strong positive correlation between an employee's age and the number of years they have worked.
+0.5143 between MonthlyIncome and YearsAtCompany, which indicates a moderate positive correlation between an employee's monthly income and the number of years they have worked at the company.
+0.7587 between YearsInCompany and YearsAtCurrentRole means that as an employee spends more time with a company, they are likely to spend more time in their current role within that company.
+0.7692 between YearsWithCurrentManager and YearsAtCompany suggests that employees who have been with the company for a longer time tend to have the same manager for a longer period as well.
+0.6184 between YearsSinceLastPromotion and YearsAtCompany indicates that as an employee spends more time at the company, they tend to have a longer period of time since their last promotion. This could suggest that the company may not have a well-defined or timely promotion process in place, or that there may be limited opportunities for advancement within the company.
+
+These correlations suggest that an employee's salary and experience are strongly related, with older employees and those with more years of experience generally earning higher salaries. Additionally, the number of years an employee has worked at the company appears to have a moderate positive impact on their salary.
+
+On the other hand, there are not many strong negative correlations. The only one worth mentioning is between "PercentSalaryHike" and "TotalWorkingYears" (-0.02), which suggests that employees who have more years of work experience tend to receive smaller annual salary increases.
+
+```{r}
+plot(hrdata$MonthlyIncome, hrdata$TotalWorkingYears, main = "Monthly Income and Total Working Years", xlab = "Monthly Income", ylab = "Total Working Years")
+```
+
+The Monthly Income and Total Working Years suggests that people who have been working for longer have higher incomes, although there is still some variability in income within each group of working years.
+
+```{r}
+plot(hrdata$MonthlyIncome, hrdata$YearsAtCompany, main = "Monthly Income and Years at Company", xlab = "Monthly Income", ylab = "Years at Company")
+```
+
+The Monthly Income and Years at Company plot shows a similar pattern to the first plot, suggesting that people who have been working at the company longer have higher incomes.
+
+```{r}
+plot(hrdata$Age, hrdata$TotalWorkingYears, main = "Age and Total Working Years", xlab = "Age", ylab = "Total Working Years")
+```
+
+The Age and Total Working Years plot  suggests that people who are older have worked for more years, which is not surprising. The plot also shows that there is a lot of variability in working years within each age group.
+
+```{r}
+plot(hrdata$YearsInCurrentRole, hrdata$YearsAtCompany, main = "Years in Current Role and Years at Company", xlab = "Years in Current Role", ylab = "Years at Company")
+```
+
+The Years in Current Role and Years at Company plot suggests that people who have been working at the company longer tend to stay in their current role longer.
+
+```{r}
+plot(hrdata$PercentSalaryHike, hrdata$TotalWorkingYears, main = "Percent Salary Hike and Total Working Years", xlab = "Percent Salary Hike", ylab = "Total Working Years")
+```
+
+The Percent Salary Hike and Total Working Years plot suggests that people who have worked for the company longer tend to receive higher percent salary hikes. However, there is still some variability in the percent salary hike within each group of working years.
+
+```{r}
+scatterplot(MonthlyIncome~YearsAtCompany,data=hrdata,main="Distribution of monthly
+            income with work experience",ylab="Monthly Income"
+            ,xlab = "Years at company")
+
+```
+
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+number_of_attirttions <- hrdata %>% group_by(Attrition) %>% summarise(Count=n())
+number_of_attirttions
+```
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+ggplot(data = number_of_attirttions, aes(x=Attrition, y=Count,fill=Attrition)) + geom_bar(stat="identity") + theme_minimal()+ 
+geom_text(aes(x=Attrition, y=0.01, label= Count),
+            hjust=0.5, vjust=-3, size=4, 
+            colour="black", fontface="bold",
+         angle=360) + labs(title="Employee Attrition (Count)", x="Employee Attrition",y="Count") + theme(plot.title=element_text(hjust=0.5))
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+attrition_percentage <- hrdata %>% group_by(Attrition) %>% summarise(Count=n()) %>% mutate(pct=round(prop.table(Count),2) * 100)
+ggplot(attrition_percentage, aes(x = factor(1), y = Count)) +
+  geom_col(aes(fill = Attrition), width = 1) +
+  geom_text(aes(label = sprintf("%.2f%%", pct)), position = position_stack(vjust = 0.5)) +
+  coord_polar("y") + ggtitle("Employee Attrition(%)")+theme_void()
+```
+
+BURAYA YAZi YAZ!
+
+
+```{r}
+ggplot(hrdata, aes(x=Gender, y=MonthlyIncome, fill=Gender)) + geom_boxplot() + facet_wrap(~Attrition) +labs(title = "Monthly Income Breakdown by Gender") 
+```
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+ggplot(hrdata, aes(x=EducationField, y=MonthlyIncome, fill=EducationField)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Education Field") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+ggplot(hrdata, aes(x=Education, y=MonthlyIncome, fill=Education)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Education Level") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+ggplot(hrdata, aes(x=OverTime, y=MonthlyIncome, fill=OverTime)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by OverTime") 
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+ggplot(hrdata, aes(x=Department, y=MonthlyIncome, fill=Department)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Department") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+ggplot(hrdata, aes(x=Attrition, y=MonthlyIncome, fill=Attrition)) + geom_boxplot() + facet_wrap(~Gender~Department) + labs(title = "Monthly Income Breakdown by Department, Gender, and Attrition")
+```
+
+BURAYA YAZI YAZ! 
+
+```{r}
+Categorical_barplot <- function(hrdata,group_col,fill_col){
+hrdata %>%
+  group_by_(group_col, fill_col) %>%
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),lbl = scales::percent(pct))%>% 
+  ggplot(aes_(x = group_col,y = ~pct,
+           fill = fill_col)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percent",x = "Attrition",title = "Compare attrition accross category")+
+  theme_minimal()
+}
+
+Categorical_barplot(hrdata,~Attrition,~BusinessTravel)
+Categorical_barplot(hrdata,~Attrition,~Department)
+Categorical_barplot(hrdata,~Attrition,~EducationField)
+Categorical_barplot(hrdata,~Attrition,~Gender)
+Categorical_barplot(hrdata,~Attrition,~JobRole)
+Categorical_barplot(hrdata,~Attrition,~MaritalStatus)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~WorkLifeBalance)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~JobLevel)
+Categorical_barplot(hrdata,~Attrition,~JobInvolvement)
+Categorical_barplot(hrdata,~Attrition,~JobSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~EnvironmentSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~RelationshipSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~PerformanceRating)
+Categorical_barplot(hrdata,~Attrition,~StockOptionLevel)
+```
+BURAYA YAZI YAZ!
+
+```{r}
+chisq.test(hrdata$Department, hrdata$Attrition)
+```
+
+BURAYA YAZI YAZ
+```{r}
+chisq.test(hrdata$BusinessTravel, hrdata$Attrition)
+```
+BURAYA YAZI YAZ!
+
+```{r}
+chisq.test(hrdata$Education, hrdata$Attrition)
+```
+BURAYA YAZI YAZ!
+
+```{r}
+chisq.test(hrdata$EducationField, hrdata$Attrition)
+```
+Buraya yazi yaz!!!
+
+```{r}
+chisq.test(hrdata$Gender, hrdata$Attrition)
+```
+
+!Buraya yazi yaz!
+
+```{r}
+chisq.test(hrdata$JobLevel, hrdata$Attrition)
+```
+yazi!!
+
+```{r}
+chisq.test(hrdata$JobRole, hrdata$Attrition)
+```
+yazi!!
+
+```{r}
+chisq.test(hrdata$MaritalStatus, hrdata$Attrition)
+```
+yazi!!
+
+```{r}
+chisq.test(hrdata$EnvironmentSatisfaction, hrdata$Attrition)
+```
+yazi!
+
+```{r}
+chisq.test(hrdata$JobSatisfaction, hrdata$Attrition)
+```
+yazi!
+
+```{r}
+chisq.test(hrdata$WorkLifeBalance, hrdata$Attrition)
+```
+!yazi!
+
+```{r}
+set.seed(123)
+train <- sample(1:nrow(hrdata), nrow(hrdata)*.7)
+test = -train
+hrdata.train <- hrdata[train,]
+hrdata.test <- hrdata[test,]
+```
+BURAYA YAZI YAZ!
+
+```{r}
+# Logistic Regression Analysis Step 1: 31 Variable
+# Building up the model following some simple steps as follows:
+# 1.Identify the independent variables
+# 2.Incorporate the dependent variable “Attrition” in the model
+# 3.Find the most significant variables in determining employee attrition
+# 3.Transform the data type of model from “character” to “formula”
+# 4.Incorporate TRAINING data into the formula and build the model
+# First,incorporating 30 dependent variables to find out the significant variables
+hrdata.fit=glm(Attrition~., data=hrdata, family = binomial)
+summary(hrdata.fit)
+```
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+car::vif(hrdata.fit)
+```
+
+BURAYA YAZI YAZ!
+
+```{r}
+hrdata.pred <- predict(hrdata.fit, newdata = hrdata.test)
+mypreds1 <- ifelse(exp(hrdata.pred) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds1), factor(hrdata.test$Attrition))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+AIC(hrdata.fit)
+```
+
+BURAYA YAZI YAZ!
+
+
+```{r}
+###Step 6: Generate ROC curve
+r <- roc(hrdata.test$Attrition, hrdata.pred)
+plot.roc(r)
+```
+BURAYA YAZI YAZ!!
+
+```{r}
+
+# Logistic Regression Analysis Step 2: 17 Variable
+# After first scoring iteration, picking the most significant based on P-value, which is 17 variables
+# Incorporating the 17 dependent variables to find out the significant variables
+
+hrdata.fit.2=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobRole+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+WorkLifeBalance+YearsAtCompany+YearsInCurrentRole+YearsSinceLastPromotion+YearsWithCurrManager, data=hrdata, family = binomial)
+summary(hrdata.fit.2)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+car::vif(hrdata.fit.2)
+```
+
+BURAYA YAZI YAZ!
+
+```{r}
+hrdata.pred.2 <- predict(hrdata.fit.2, newdata = hrdata.test)
+mypreds2 <- ifelse(exp(hrdata.pred.2) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds2), factor(hrdata.test$Attrition))
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+AIC(hrdata.fit.2)
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+r2 <- roc(hrdata.test$Attrition, hrdata.pred.2)
+plot.roc(r2)
+```
+BURAYA YAZI YAZ!
+
+```{r}
+# Logistic Regression Analysis Step 3: 16 Variable
+# After second scoring iteration, eliminate the JobRole variable because JobRoleSales Representative is the only JobRole is significant
+# So we eliminate the JobRole as a variable for our model 
+# Incorporating the 16 dependent variables to find out the significant variables
+
+hrdata.fit.3=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+WorkLifeBalance+YearsAtCompany+YearsInCurrentRole+YearsSinceLastPromotion+YearsWithCurrManager, data=hrdata, family = binomial)
+summary(hrdata.fit.3)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+car::vif(hrdata.fit.3)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+hrdata.pred.3 <- predict(hrdata.fit.3, newdata = hrdata.test)
+mypreds3 <- ifelse(exp(hrdata.pred.3) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds3), factor(hrdata.test$Attrition))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+AIC(hrdata.fit.3)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+r3 <- roc(hrdata.test$Attrition, hrdata.pred.3)
+plot.roc(r3)
+```
+
+BURAYA YAZI YAZ!
+
+```{r}
+# Logistic Regression Analysis Step 4: 13 Variable
+# After third scoring iteration, WorkLifeBalance, YearsAtCompany, YearsWithCurrManager
+# Incorporating the 13 dependent variables to find out the significant variables
+
+hrdata.fit.4=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+YearsInCurrentRole+YearsSinceLastPromotion, data=hrdata, family = binomial)
+summary(hrdata.fit.4)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+car::vif(hrdata.fit.4)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+hrdata.pred.4 <- predict(hrdata.fit.4, newdata = hrdata.test)
+mypreds4 <- ifelse(exp(hrdata.pred.4) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds4), factor(hrdata.test$Attrition))
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+AIC(hrdata.fit.4)
+```
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+r4 <- roc(hrdata.test$Attrition, hrdata.pred.4)
+plot.roc(r4)
+```
+BURAYA YAZI YAZ!!
+
+
+```{r}
+# select factor variables to convert, but leave Attrition out
+vars_to_dummy <- hrdata[,sapply(hrdata, is.factor) & colnames(hrdata) != "Attrition"]
+head(vars_to_dummy)
+# Create dummy variables with caret
+dummies <- dummyVars( ~ ., data = vars_to_dummy)
+hrdata_dummy <- predict(dummies, newdata = vars_to_dummy)
+# New dataframe to work with later
+hrdata_sample <- data.frame(hrdata_dummy, hrdata.NUM, Attrition = hrdata$Attrition)
+View(hrdata_sample)
+
+```
+
+BURAYA YAZI YAZ
+
+```{r}
+# remove near zero variables (except for attr)
+remove_cols <- nearZeroVar(hrdata_sample, names = TRUE)
+remove_cols
+# Get all column names 
+all_cols <- names(hrdata_sample)
+# Remove from data
+hrdata_final<- hrdata_sample[ , setdiff(all_cols, remove_cols)]
+# make sure that factor levels of attrition are correctly ordered
+levels(hrdata_final$Attrition)
+hrdata_final$Attrition <- factor(hrdata_final$Attrition, levels = c("Yes", "No"))
+# double check
+levels(hrdata_final$Attrition)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+myFolds <- createFolds(hrdata_final$Attrition, k = 5)
+
+f1 <- function(data, lev = NULL, model = NULL) {
+  f1_val <- MLmetrics::F1_Score(y_pred = data$pred,
+                                y_true = data$obs,
+                                positive = lev[1])
+  c(F1 = f1_val)
+}
+
+# Create reusable trainControl object: myControl
+myControl <- trainControl(
+  method = "repeatedcv", 
+  repeats = 5, 
+  summaryFunction = f1,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = TRUE,
+  savePredictions = "final",
+  index = myFolds
+)
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+# define the model
+model <- train(
+  Attrition ~ .,
+  data = hrdata_final,
+  method = "glmnet",
+  tuneGrid = expand.grid(alpha = 0, lambda = seq(0.001, 0.1, length.out = 100)),
+  trControl = myControl
+)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+# print the best lambda
+model$bestTune
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+
+# create the model matrix and response vector
+X <- model.matrix(Attrition ~ ., data = hrdata_final)
+y <- as.numeric(hrdata_final$Attrition) - 1
+
+# fit the ridge regression
+ridge_model <- glmnet(X, y, alpha = 0, lambda = 0.01)
+
+# print the coefficients
+coef(ridge_model)
+
+```
+
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+
+# predict on the test set
+pred <- predict(ridge_model, newx = X[test, ], s = 0.01)
+
+# convert predicted values to binary predictions
+binary_pred <- ifelse(pred > 0.5, 1, 0)
+
+# calculate accuracy
+accuracy <- mean(binary_pred == y[test])
+
+accuracy
+
+```
+
+!!BURAYA YAZI YAZ!!
+
+```{r}
+# fit the lasso regression using cross-validation to select the lambda
+lasso_model <- cv.glmnet(X, y, alpha = 1, nfolds = 5, type.measure = "class", family = "binomial")
+
+# print the selected lambda value
+print(lasso_model$lambda.min)
+```
+
+!!BURAYA YAZI YAZ!!
+
+
+```{r}
+# print the coefficients of the model
+coef(lasso_model)
+```
+!!BURAYA YAZI YAZ!!
+
+```{r}
+# make predictions on the test data
+lasso_pred <- predict(lasso_model, newx = X, type = "class")
+
+# calculate accuracy
+lasso_acc <- mean(lasso_pred == y)
+lasso_acc
+```
+!!BURAYA YAZI YAZ!!
+
