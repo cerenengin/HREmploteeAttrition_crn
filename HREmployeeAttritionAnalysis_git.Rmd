@@ -1,0 +1,700 @@
+---
+title: "HR Employee Attrition Analysis"
+---
+
+```{r setup, include=FALSE}
+output = "output=github_document"
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Dataset
+
+The application of analytics in human resources has become increasingly popular, enabling effective hiring and workforce management. Like other departments, HR departments require tailored analytics solutions suited to their domain. Typically, HR datasets are smaller and consist of mixed data types comprising qualitative and quantitative variables, with an emphasis on data interpretation over pure prediction. As people data is involved, HR managers require models that provide interpretive insights for decision-making. Hence, exploratory analyses that assist in extracting insights from unorganized data can be highly beneficial for HR departments. This report explores the IBM HR dataset, which includes various employee characteristics and their attrition status, to demonstrate useful approaches to mixed data and exploratory analysis in HR. The dataset was originally obtained from Kaggle.com.
+
+#### Dataset Description 
+
+The IBM HR dataset comprises 35 columns and 1,470 rows, including employee demographic, job role, work environment, and performance-related variables. The dataset contains both categorical and numerical variables, and there are no missing values in any of the columns. The target variable is Attrition, indicating whether an employee has left the organization.
+
+#### Expected Findings
+
+Before embarking on data analysis, it is crucial to have an understanding of the potential insights that could be revealed. In this study, the primary objective is to determine the factors that contribute to employee attrition in the HR dataset.
+
+Previous research in the field of HR suggests that job satisfaction, work-life balance, and job involvement may play a significant role in employee attrition rates. It is also possible that salary, education level, and performance rating could impact attrition.
+
+In addition, it will be interesting to explore if there are any variations in attrition rates based on job roles, departments, and gender.
+
+The anticipated results of this analysis can provide organizations with valuable insights into the factors that lead to employee attrition. These findings can help organizations identify areas that require improvement and take steps to address them. Ultimately, this could lead to reduced attrition rates and better employee retention, which is critical for organizational success.
+
+#### Loading the Libraries
+
+```{r}
+install.packages('tidyverse', repos = "http://cran.us.r-project.org")
+install.packages('cowplot', repos = "http://cran.us.r-project.org")
+install.packages("caret", repos = "http://cran.us.r-project.org")
+install.packages("caTools", repos = "http://cran.us.r-project.org")
+install.packages("MLmetrics", repos = "http://cran.us.r-project.org")
+library(MLmetrics)
+library(caTools)
+library(caret)
+library(tidyverse)
+library(ggplot2)
+library(ggcorrplot)
+library(caret)
+library(rpart)
+library(pROC)
+library(cowplot)
+library(caret)
+library(glmnet)
+library(car)
+library(leaps)
+library(MASS)
+```
+
+#### Loading the Data
+Loading the data is an essential step in any data analysis project. In this project, the cleaned dataset was loaded into RStudio from a Microsoft Excel CSV file. The data was then modified using the code provided to ensure consistency in the structure of the data. To verify that the data was loaded correctly, the "head" command was used to display the first 6 rows for each variable of the original dataset. This allows for a quick visual inspection of the data and ensures that everything was loaded as expected. By taking these steps, we can be confident that the data is ready for analysis.
+
+
+```{r}
+hrdata <- read.csv("/Users/cerenengin/Desktop/ULL Courses/INFX 512 - Data Analysis and Visuilization/Semester Project/WA_Fn-UseC_-HR-Employee-Attrition.csv")
+```
+
+ 
+
+```{r}
+head(hrdata)
+```
+
+```{r}
+colnames(hrdata)
+```
+
+### Data Cleaning and Preparation 
+
+Before analysis, we removed columns with no variation, such as EmployeeCount and StandardHours, and eliminated redundant columns such as EmployeeNumber. Additionally, we recoded categorical variables to numeric codes to enable computation. For example, we recoded Education into five levels, with 1 representing Below College and 5 representing Doctorate. We also created dummy variables for binary categorical variables, such as Gender and OverTime.
+
+Data cleaning is a crucial step in any data analysis project. In this code, several data cleaning operations were performed on the hrdata dataset.
+First, all character variables in the hrdata dataset were converted to factors using as.factor. This is important because many analytical functions in R, including some used in this project, work better with factor variables than with character variables.
+
+Next, several variables were recoded to better reflect their categories and to facilitate analysis. For example, RelationshipSatisfaction was recoded from a numeric variable with values ranging from 1 to 4 to a factor variable with four levels, labeled "Low", "Medium", "High", and "Very High". Similarly, Education was recoded from a numeric variable with values ranging from 1 to 5 to a factor variable with five levels, labeled "Below College", "College", "Bachelor", "Master", and "Doctor".
+
+Other variables that were recoded using factor included JobInvolvement, EnvironmentSatisfaction, JobSatisfaction, PerformanceRating, and WorkLifeBalance. These variables were all originally numeric variables with values ranging from 1 to 4, and were recoded to factor variables with four levels, labeled according to their corresponding categories.
+
+Finally, the JobLevel and StockOptionLevel variables, which were originally integer variables, were converted to factor variables using as.factor.
+
+Overall, these data cleaning operations will make it easier to work with the hrdata dataset and to perform subsequent analyses.
+
+
+```{r}
+hrdata[sapply(hrdata, is.character)] <- lapply(hrdata[sapply(hrdata, is.character)], as.factor)
+hrdata$RelationshipSatisfaction <- factor(hrdata$RelationshipSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$Education <- factor(hrdata$Education, levels = c(1, 2, 3, 4, 5), labels = c("Below College", "College", "Bachelor", "Master", "Doctor"))
+hrdata$JobInvolvement <- factor(hrdata$JobInvolvement, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$EnvironmentSatisfaction <- factor(hrdata$EnvironmentSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$JobSatisfaction <- factor(hrdata$JobSatisfaction, levels = c(1, 2, 3, 4), labels = c("Low", "Medium", "High", "Very High"))
+hrdata$PerformanceRating <- factor(hrdata$PerformanceRating, levels = c(1, 2, 3, 4), labels = c("Low", "Good", "Excellent", "Outstanding"))
+hrdata$WorkLifeBalance <- factor(hrdata$WorkLifeBalance, levels = c(1, 2, 3, 4), labels = c("Bad", "Good", "Better", "Best"))
+hrdata$JobLevel <- as.factor(hrdata$JobLevel)
+hrdata$StockOptionLevel <- as.factor(hrdata$StockOptionLevel)
+hrdata[sapply(hrdata, is.integer)] <- lapply(hrdata[sapply(hrdata, is.integer)], as.numeric)
+str(hrdata)
+```
+
+### Data Analysis
+#### Numeric Analysis
+
+To begin the analysis, we first examined the correlations between the variables in the HR dataset. This was done to identify any potential relationships between the variables and to get a better understanding of which variables may be important predictors of employee attrition.
+
+
+```{r}
+hrdata.NUM <- select_if(hrdata, is.numeric)
+cor(hrdata.NUM)
+```
+
+```{r}
+corr <- round(cor(hrdata.NUM), 2)
+ggcorrplot(corr, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 2, 
+           method="square", 
+           colors = c("green", "white", "red"), 
+           title="Correlation Diagram for Different Variables", 
+           ggtheme=theme_minimal())
+```
+
+The cor() function is used to calculate the correlations between the numeric variables. The resulting output is a correlation matrix that shows the correlation coefficients between each pair of variables. Then, correlations visualized by using ggcorrplot().
+
+Looking at the output, we can see that some variables are positively correlated with each other, while others are negatively correlated or have very weak correlations.
+
+For example, the correlation between age and total working years is 0.68, indicating a moderate positive correlation between these two variables. Similarly, monthly income is positively correlated with age and total working years, with correlation coefficients of 0.5 and 0.77 respectively.
+
+On the other hand, distance from home and percent salary hike have very weak correlations with most other variables, indicating that they may not be strongly related to the other variables in the hrdataset.
+
+The highest correlations in the correlation matrix are:
+
+0.7729 between MonthlyIncome and TotalWorkingYears, which indicates a strong positive correlation between an employee's monthly income and the number of years they have worked.
+0.6804 between Age and TotalWorkingYears, which indicates a strong positive correlation between an employee's age and the number of years they have worked.
+0.5143 between MonthlyIncome and YearsAtCompany, which indicates a moderate positive correlation between an employee's monthly income and the number of years they have worked at the company.
+0.7587 between YearsInCompany and YearsAtCurrentRole means that as an employee spends more time with a company, they are likely to spend more time in their current role within that company.
+0.7692 between YearsWithCurrentManager and YearsAtCompany suggests that employees who have been with the company for a longer time tend to have the same manager for a longer period as well.
+0.6184 between YearsSinceLastPromotion and YearsAtCompany indicates that as an employee spends more time at the company, they tend to have a longer period of time since their last promotion. This could suggest that the company may not have a well-defined or timely promotion process in place, or that there may be limited opportunities for advancement within the company.
+
+These correlations suggest that an employee's salary and experience are strongly related, with older employees and those with more years of experience generally earning higher salaries. Additionally, the number of years an employee has worked at the company appears to have a moderate positive impact on their salary.
+
+On the other hand, there are not many strong negative correlations. The only one worth mentioning is between "PercentSalaryHike" and "TotalWorkingYears" (-0.02), which suggests that employees who have more years of work experience tend to receive smaller annual salary increases.
+
+```{r}
+plot(hrdata$MonthlyIncome, hrdata$TotalWorkingYears, main = "Monthly Income and Total Working Years", xlab = "Monthly Income", ylab = "Total Working Years")
+```
+
+The Monthly Income and Total Working Years plot provides insights into the relationship between an employee's total working years and their monthly income. The plot shows that employees who have been working for a longer time tend to have higher monthly incomes compared to those who have been working for a shorter time. However, there is still some variability in income within each group of working years, indicating that factors other than working years may also play a role in determining an employee's income, such as job level or performance rating. Overall, this plot suggests that there may be a positive correlation between total working years and monthly income, which could be further explored through statistical analysis.
+
+```{r}
+plot(hrdata$MonthlyIncome, hrdata$YearsAtCompany, main = "Monthly Income and Years at Company", xlab = "Monthly Income", ylab = "Years at Company")
+```
+
+The Monthly Income and Years at Company plot shows a similar pattern to the Monthly Income and Total Working Years plot, with a positive correlation between income and years at the company. As expected, people who have been working at the company longer tend to have higher incomes. However, there is still some variability in income within each group of years at the company. This could be due to factors such as job level, performance, and education level, which may impact an individual's income regardless of their tenure at the company. It will be interesting to further explore these variables to gain a better understanding of their relationship with income and tenure at the company.
+
+```{r}
+plot(hrdata$Age, hrdata$TotalWorkingYears, main = "Age and Total Working Years", xlab = "Age", ylab = "Total Working Years")
+```
+
+The Age and Total Working Years plot suggests that people who are older have worked for more years, which is not surprising. The plot also shows that there is a lot of variability in working years within each age group. The line in the middle of the plot, which cuts the data at age 18, shows that this is the youngest age of an employee in the company. It is interesting to note that there are some employees who have worked for a very long time despite being relatively young, and there are also some employees who have not worked for very long despite being older. This could indicate differences in career paths or opportunities within the company.
+
+```{r}
+plot(hrdata$YearsInCurrentRole, hrdata$YearsAtCompany, main = "Years in Current Role and Years at Company", xlab = "Years in Current Role", ylab = "Years at Company")
+```
+
+The Years in Current Role and Years at Company plot suggests that people who have been working at the company longer tend to stay in their current role longer.
+
+```{r}
+plot(hrdata$PercentSalaryHike, hrdata$TotalWorkingYears, main = "Percent Salary Hike and Total Working Years", xlab = "Percent Salary Hike", ylab = "Total Working Years")
+```
+
+The scatter plot between Percent Salary Hike and Total Working Years shows that employees with higher total working years tend to have a lower percent salary hike. This could indicate that the company may not have a clear system for salary increases and may not be rewarding employees for their long-term loyalty and experience. Additionally, it is possible that the company is hiring new employees at higher starting salaries, which could contribute to the lower percent salary hikes for long-term employees.
+
+```{r}
+scatterplot(MonthlyIncome~YearsAtCompany,data=hrdata,main="Distribution of monthly
+            income with work experience",ylab="Monthly Income"
+            ,xlab = "Years at company")
+
+```
+
+The scatterplot shows the distribution of monthly income in relation to the number of years an employee has been working at the company. The plot suggests that as an employee's years of experience at the company increases, their monthly income tends to increase as well. However, there is still a lot of variability in income within each group of years of experience, indicating that other factors such as job role, education level, or performance rating may also play a role in determining an employee's income.
+
+```{r}
+number_of_attirttions <- hrdata %>% group_by(Attrition) %>% summarise(Count=n())
+number_of_attirttions
+```
+
+#### Continious and Categorical Variable Analysis
+
+Employee attrition is an important metric that organizations use to track the number of employees leaving their organization over a given period of time. In our dataset, there are 1233 employees who did not leave the company (No) and 237 employees who did leave (Yes).
+
+
+```{r}
+ggplot(data = number_of_attirttions, aes(x=Attrition, y=Count,fill=Attrition)) + geom_bar(stat="identity") + theme_minimal()+ 
+geom_text(aes(x=Attrition, y=0.01, label= Count),
+            hjust=0.5, vjust=-3, size=4, 
+            colour="black", fontface="bold",
+         angle=360) + labs(title="Employee Attrition (Count)", x="Employee Attrition",y="Count") + theme(plot.title=element_text(hjust=0.5))
+```
+
+To visualize the number of employees who left or stayed, we created a bar chart using ggplot. The chart shows that the majority of employees in the dataset did not leave the company (No), with a count of 1233. On the other hand, only 237 employees left (Yes).
+
+```{r}
+attrition_percentage <- hrdata %>% group_by(Attrition) %>% summarise(Count=n()) %>% mutate(pct=round(prop.table(Count),2) * 100)
+ggplot(attrition_percentage, aes(x = factor(1), y = Count)) +
+  geom_col(aes(fill = Attrition), width = 1) +
+  geom_text(aes(label = sprintf("%.2f%%", pct)), position = position_stack(vjust = 0.5)) +
+  coord_polar("y") + ggtitle("Employee Attrition(%)")+theme_void()
+```
+
+Next, we wanted to understand the proportion of employees who left versus those who stayed. We created a polar chart to show the percentage of employees who left versus those who stayed. The chart shows that out of the total number of employees in the dataset, 16% left the company, and 84% stayed.
+
+```{r}
+ggplot(hrdata, aes(x=Gender, y=MonthlyIncome, fill=Gender)) + geom_boxplot() + facet_wrap(~Attrition) +labs(title = "Monthly Income Breakdown by Gender") 
+```
+ 
+The plot displays the distribution of Monthly Income among male and female employees in the company, classified by Attrition status. The box plot illustrates the median Monthly Income, the first and third quartiles, and the range of Monthly Income values within 1.5 times the interquartile range. The plot is faceted by Attrition status, facilitating a comparison of Monthly Income distributions between employees who left the company and those who stayed. Based on the plot, it seems that the median Monthly Income of female employees is higher than that of male employees who stayed. Additionally, the median Monthly Income of male employees is higher than that of female employees who left, and employees who left the company had a lower median Monthly Income in comparison to those who stayed. However, further analysis and statistical tests are required to draw more definitive conclusions.
+
+```{r}
+ggplot(hrdata, aes(x=EducationField, y=MonthlyIncome, fill=EducationField)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Education Field") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+
+The plot suggests that employees with an education in Human Resources and Marketing have higher median Monthly Income compared to other fields. It also suggests that employees who left the company had lower median Monthly Income compared to those who stayed across all Education Fields.
+
+```{r}
+ggplot(hrdata, aes(x=Education, y=MonthlyIncome, fill=Education)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Education Level") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+
+From the plot, it appears that the median Monthly Income of employees with higher Education levels is generally higher than that of employees with lower Education levels, regardless of their Attrition status. It can also be observed that employees who left the company tend to have lower median Monthly Income than those who stayed, across all Education levels. 
+
+```{r}
+ggplot(hrdata, aes(x=OverTime, y=MonthlyIncome, fill=OverTime)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by OverTime") 
+```
+ 
+From the plot, it appears that the median Monthly Income of employees who work overtime is higher than those who don't work overtime, for both employees who left the company and those who stayed. It is interesting to note that among employees who left the company, those who worked overtime had lower median monthly income compared to those who did not work overtime. This could indicate that employees who felt they were not being adequately compensated for their extra work were more likely to leave the company.
+
+```{r}
+ggplot(hrdata, aes(x=Department, y=MonthlyIncome, fill=Department)) + geom_boxplot() + facet_wrap(~Attrition) + labs(title = "Monthly Income Breakdown by Department") + theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust=1))
+```
+ 
+From the plot, it appears that employees in the Sales department have the highest median Monthly Income, followed by employees in the Human Resources department and then those in the Research & Development department. Furthermore, the median Monthly Income of employees who left the company is lower than those who stayed across all departments. It is also interesting to note that the Monthly Income distribution of employees in the Human Resources department who left the company is more variable than those who stayed, indicating a wider range of incomes for those who left.
+
+```{r}
+ggplot(hrdata, aes(x=Attrition, y=MonthlyIncome, fill=Attrition)) + geom_boxplot() + facet_wrap(~Gender~Department) + labs(title = "Monthly Income Breakdown by Department, Gender, and Attrition")
+```
+
+The plot suggests that there are some differences in Monthly Income distribution between employees who left and those who stayed. For example, in the Sales department, male employees who left the company have a lower median Monthly Income than male employees who stayed. However, female employees who left the company have a higher median Monthly Income than female employees who stayed.
+
+Similarly, in the Research & Development department, male employees who left have a lower median Monthly Income than male employees who stayed, while female employees who left have a similar median Monthly Income to female employees who stayed.
+
+In the Human Resources department, there are no clear differences in Monthly Income distribution between employees who left and those who stayed, although the sample size of employees who left is small in this department.
+
+#### Categorical Variable Analysis
+
+The function Categorical_barplot takes in a HR dataset and two categorical columns and generates a bar plot showing the percentage of employees with attrition in each category. The plot helps to compare the attrition rate across different categories.
+
+```{r}
+Categorical_barplot <- function(hrdata,group_col,fill_col){
+hrdata %>%
+  group_by_(group_col, fill_col) %>%
+  summarize(n = n()) %>% 
+  mutate(pct = n/sum(n),lbl = scales::percent(pct))%>% 
+  ggplot(aes_(x = group_col,y = ~pct,
+           fill = fill_col)) +
+  geom_bar(stat = "identity",
+           position = "fill") +
+  scale_y_continuous(breaks = seq(0, 1, .2),label =scales::percent) +
+  geom_text(aes(label = lbl), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percent",x = "Attrition",title = "Compare attrition accross category")+
+  theme_minimal()
+}
+
+Categorical_barplot(hrdata,~Attrition,~BusinessTravel)
+Categorical_barplot(hrdata,~Attrition,~Department)
+Categorical_barplot(hrdata,~Attrition,~EducationField)
+Categorical_barplot(hrdata,~Attrition,~Gender)
+Categorical_barplot(hrdata,~Attrition,~JobRole)
+Categorical_barplot(hrdata,~Attrition,~MaritalStatus)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~WorkLifeBalance)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~JobLevel)
+Categorical_barplot(hrdata,~Attrition,~JobInvolvement)
+Categorical_barplot(hrdata,~Attrition,~JobSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~EnvironmentSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~RelationshipSatisfaction)
+Categorical_barplot(hrdata,~Attrition,~OverTime)
+Categorical_barplot(hrdata,~Attrition,~PerformanceRating)
+Categorical_barplot(hrdata,~Attrition,~StockOptionLevel)
+```
+The plots reveal some interesting patterns in the data. For example, employees who travel frequently for work have a higher percentage of attrition compared to those who travel rarely or not at all. Similarly, employees in the Human Resources and Sales departments have a higher attrition rate compared to those in other departments such as Research & Development and Manufacturing. Employees in the Life Sciences and Medical fields have a lower attrition rate compared to those in other fields such as Human Resources and Technical Degree. The percentage of male employees who have left the company is higher than that of female employees, while employees who are single have a higher attrition rate compared to those who are married or divorced.
+
+The function also highlights the importance of the work-life balance, job satisfaction, and relationship satisfaction for employee retention. Employees who report having a better work-life balance, higher job satisfaction, and higher relationship satisfaction have a lower percentage of attrition compared to those who report lower levels of these factors.
+
+Overall, the Categorical_barplot function provides a useful tool for exploring patterns in employee attrition across different categorical variables and can help companies identify areas where they may need to focus their retention efforts.
+
+#### Chi Square Test
+
+The chi-squared test shows that there is a significant association between the department an employee works in and their likelihood of attrition. The p-value of 0.004526 indicates that the association is not likely due to chance.
+
+```{r}
+chisq.test(hrdata$Department, hrdata$Attrition)
+```
+
+The chi-squared test results for the relationship between Business Travel and Attrition suggest that there is a significant association between these two variables, with a p-value of 5.609e-06. This indicates that Business Travel may be an important factor to consider in understanding employee attrition.
+
+```{r}
+chisq.test(hrdata$BusinessTravel, hrdata$Attrition)
+```
+
+The chi-squared test between Education and Attrition yielded a p-value of 0.5455, indicating that there is no significant association between Education and Attrition in the HR dataset.
+
+```{r}
+chisq.test(hrdata$Education, hrdata$Attrition)
+```
+
+The chi-squared test between EducationField and Attrition showed a significant association between these variables (p-value = 0.006774). However, it is important to note that the warning "Chi-squared approximation may be incorrect" was displayed, indicating that the assumptions of the test may not have been fully met.
+
+```{r}
+chisq.test(hrdata$EducationField, hrdata$Attrition)
+```
+
+The chi-squared test with Yates' continuity correction was performed to analyze the relationship between Gender and Attrition in the HR dataset. The results indicate that there is no significant association between the two variables (p-value=0.2906).
+
+```{r}
+chisq.test(hrdata$Gender, hrdata$Attrition)
+```
+
+The chi-squared test results for the relationship between job level and attrition indicate a significant association between the two variables (p-value < 0.001). This suggests that job level may be a contributing factor to employee attrition within the company.
+
+```{r}
+chisq.test(hrdata$JobLevel, hrdata$Attrition)
+```
+
+Significant
+
+```{r}
+chisq.test(hrdata$JobRole, hrdata$Attrition)
+```
+
+Significant
+
+```{r}
+chisq.test(hrdata$MaritalStatus, hrdata$Attrition)
+```
+
+Significant
+
+```{r}
+chisq.test(hrdata$EnvironmentSatisfaction, hrdata$Attrition)
+```
+
+Significant
+
+```{r}
+chisq.test(hrdata$JobSatisfaction, hrdata$Attrition)
+```
+
+Significant
+
+```{r}
+chisq.test(hrdata$WorkLifeBalance, hrdata$Attrition)
+```
+
+Significant
+
+### Predictive Modeling
+#### Logistic Regression
+
+We randomly split the data into a training set containing 70% of the data and a test set containing the remaining 30%. We will use logistic regression to predict employee attrition based on several variables.
+
+```{r}
+set.seed(123)
+train <- sample(1:nrow(hrdata), nrow(hrdata)*.7)
+test = -train
+hrdata.train <- hrdata[train,]
+hrdata.test <- hrdata[test,]
+```
+
+#### Model 1
+
+This is a logistic regression model applied to the HR dataset to predict employee attrition. The dependent variable is "Attrition" and the independent variables include employee demographic information, job-related factors, and work environment factors.
+
+
+```{r}
+hrdata.fit=glm(Attrition~., data=hrdata, family = binomial)
+summary(hrdata.fit)
+```
+ 
+The summary output provides information on the coefficients of the model. The coefficients represent the change in the log-odds of attrition for a unit change in the corresponding independent variable, holding all other variables constant. The p-values associated with each coefficient indicate whether the variable is statistically significant in predicting employee attrition.
+
+For example, the variable "BusinessTravelTravel_Frequently" has a coefficient of 2.155 and a p-value of 1.39e-06, which indicates that employees who travel frequently for business are more likely to experience attrition. On the other hand, the variable "HourlyRate" has a coefficient of 0.004 and a p-value of 0.36, which suggests that hourly rate is not a significant predictor of employee attrition.
+
+The model has a deviance residuals ranging from -1.8204 to 3.5997, and the mean of the residuals is close to zero, indicating that the model is a good fit to the data. Overall, the logistic regression model can be used to identify factors that may contribute to employee attrition and to develop strategies to retain valuable employees.
+
+
+```{r}
+car::vif(hrdata.fit)
+```
+
+Based on the VIF values, we can see that there are several variables in the model with high collinearity. The Department variable has an extremely high GVIF of 7.34e+07, indicating strong collinearity. Similarly, the JobRole variable has a very high GVIF of 1.999e+09.
+
+Other variables with moderate collinearity include JobLevel, MonthlyIncome, StockOptionLevel, TotalWorkingYears, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, and YearsWithCurrManager, all with GVIF values greater than 2.
+
+It is important to address the issue of collinearity in the model, as it can lead to unreliable coefficient estimates and make it difficult to interpret the effects of individual predictors. Possible solutions to address collinearity include removing one of the correlated variables, combining them into a single variable, or using regularization techniques such as ridge regression or lasso regression.
+
+
+```{r}
+hrdata.pred <- predict(hrdata.fit, newdata = hrdata.test)
+mypreds1 <- ifelse(exp(hrdata.pred) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds1), factor(hrdata.test$Attrition))
+```
+ 
+
+```{r}
+AIC(hrdata.fit)
+```
+
+After training a logistic regression model on the HR employee dataset, the model was used to make predictions on a test set. The predictions were evaluated using the confusion matrix and several metrics were calculated, including accuracy, sensitivity, specificity, and positive predictive value.
+
+The confusion matrix shows that the model correctly classified 386 out of 441 employees, resulting in an accuracy of 0.8753. The sensitivity of the model is 0.9044, meaning that it correctly identified 90.44% of employees who actually left the company. The specificity of the model is 0.7333, indicating that it correctly identified 73.33% of employees who stayed with the company. The positive predictive value of the model is 0.9430, which means that out of all employees predicted to leave, 94.30% actually did leave.
+
+Overall, the model appears to be performing reasonably well, with a high accuracy and positive predictive value. However, the sensitivity could be improved, as the model missed almost 10% of employees who actually left the company. It may be necessary to adjust the model or gather additional data to improve its performance.
+
+
+
+```{r}
+r <- roc(hrdata.test$Attrition, hrdata.pred)
+plot.roc(r)
+```
+The ROC curve is a graphical representation of the trade-off between the sensitivity and specificity of a binary classifier system. In this case, we have plotted the ROC curve for our logistic regression model using the ROCR package. The AUC (Area Under the Curve) value of our model is 0.8573, which indicates that our model performs well in distinguishing between the positive and negative classes. The closer the AUC value is to 1, the better the model performance. Overall, our model shows promising results in predicting employee attrition.
+
+#### Model 2
+
+The logistic regression model, hrdata.fit.2, was fitted to predict the probability of Attrition using the following 17 predictor variables: BusinessTravel, DistanceFromHome, EnvironmentSatisfaction, JobInvolvement, JobRole, JobSatisfaction, MaritalStatus, NumCompaniesWorked, OverTime, RelationshipSatisfaction, TotalWorkingYears, TrainingTimesLastYear, WorkLifeBalance, YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, and YearsWithCurrManager. The model was fitted using a binomial family, and its summary is shown below.
+
+```{r}
+hrdata.fit.2=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobRole+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+WorkLifeBalance+YearsAtCompany+YearsInCurrentRole+YearsSinceLastPromotion+YearsWithCurrManager, data=hrdata, family = binomial)
+summary(hrdata.fit.2)
+```
+ 
+The p-values of the z-tests of the coefficients indicate the statistical significance of the predictor variables. The predictor variables with p-values less than 0.05 were considered to be statistically significant. Among the predictor variables, the following were found to be statistically significant: BusinessTravelTravel_Frequently, BusinessTravelTravel_Rarely, DistanceFromHome, EnvironmentSatisfactionMedium, EnvironmentSatisfactionHigh, EnvironmentSatisfactionVery High, JobInvolvementMedium, JobInvolvementHigh, JobInvolvementVery High, JobRoleHuman Resources, JobRoleLaboratory Technician, JobRoleSales Executive, JobRoleSales Representative, JobSatisfactionMedium, JobSatisfactionHigh, JobSatisfactionVery High, MaritalStatusSingle, NumCompaniesWorked, OverTimeYes, RelationshipSatisfactionMedium, RelationshipSatisfactionHigh, RelationshipSatisfactionVery High, TotalWorkingYears, and TrainingTimesLastYear.
+
+The model's deviance residuals range from -2.0330 to 3.7731, with a median of -0.2465. The residual deviance was calculated to be 1691.4 on 1146 degrees of freedom, which suggests that the model fits the data reasonably well. However, further analysis, such as the assessment of the model's predictive performance, is needed to fully evaluate the model.
+
+```{r}
+car::vif(hrdata.fit.2)
+```
+
+Based on the variance inflation factor (VIF) analysis, the multicollinearity between the predictors in the model seems to be relatively low. Generally, a VIF value of 1 indicates no multicollinearity, while a value above 5 or 10 indicates high multicollinearity. In this case, none of the predictors have a VIF above 5. VIF analysis suggests that the linear regression model is not affected by high levels of multicollinearity, and the coefficients can be interpreted with confidence.
+
+```{r}
+hrdata.pred.2 <- predict(hrdata.fit.2, newdata = hrdata.test)
+mypreds2 <- ifelse(exp(hrdata.pred.2) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds2), factor(hrdata.test$Attrition))
+```
+
+```{r}
+AIC(hrdata.fit.2)
+```
+
+The model was used to predict attrition in the test data and the results were compared to the actual values using the confusion matrix. The accuracy of the model was 0.8685, which means that it correctly classified 86.85% of the employees as either leaving or staying. The sensitivity of the model was 0.9153, which means that it correctly identified 91.53% of those who actually left the company. The specificity was 0.64, which means that it correctly identified 64% of those who stayed in the company. The model's positive predictive value (PPV) was 0.9254, which means that when the model predicted an employee would leave, it was correct 92.54% of the time. The negative predictive value (NPV) was 0.6076, which means that when the model predicted an employee would stay, it was correct 60.76% of the time.
+
+Overall, the model performed well, with high accuracy and sensitivity, although the specificity and NPV were somewhat lower. This suggests that the model may be more effective at identifying employees who are likely to leave the company than those who are likely to stay. However, the PPV was high, which suggests that the model is generally reliable when it predicts that an employee will leave the company.
+
+```{r}
+r2 <- roc(hrdata.test$Attrition, hrdata.pred.2)
+plot.roc(r2)
+```
+
+The ROC curve generated by the code shows an AUC (Area Under the Curve) value of 0.8324, which indicates good discrimination between the positive and negative classes. The curve is plotted with sensitivity on the y-axis and 1-specificity on the x-axis. The closer the curve is to the upper left corner, the better the classifier's performance.
+
+In this case, we can see that the ROC curve is close to the upper left corner, which indicates that the model has a good balance between sensitivity and specificity. This means that the model is able to identify most of the positive cases (employees who are likely to leave the company) while also correctly identifying a large proportion of the negative cases (employees who are likely to stay).
+
+#### Model 3
+
+After two scoring iterations, the JobRole variable was eliminated because only the JobRoleSales Representative was found significant. As a result, the JobRole variable was removed from the model. Then, the remaining 16 variables were incorporated to determine the significant variables for the model.
+
+
+```{r}
+hrdata.fit.3=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+WorkLifeBalance+YearsAtCompany+YearsInCurrentRole+YearsSinceLastPromotion+YearsWithCurrManager, data=hrdata, family = binomial)
+summary(hrdata.fit.3)
+```
+
+The summary of the logistic regression model is presented above. The results indicate that all of the independent variables are significant, except for MaritalStatusMarried.
+
+The coefficients for each variable, their standard errors, z-values, and p-values are shown.
+
+We can conclude that the logistic regression model is significant, and the independent variables can be used to predict the likelihood of attrition for employees in the company.
+ 
+```{r}
+car::vif(hrdata.fit.3)
+```
+ 
+We can see that only the YearsAtCompany variable has a high VIF value, indicating that it may be highly correlated with other predictor variables in the model. This could potentially affect the accuracy and reliability of the regression coefficients for this variable. However, since all other predictor variables have VIF values below 5, there is no major issue of multicollinearity in this model.
+
+```{r}
+hrdata.pred.3 <- predict(hrdata.fit.3, newdata = hrdata.test)
+mypreds3 <- ifelse(exp(hrdata.pred.3) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds3), factor(hrdata.test$Attrition))
+```
+ 
+```{r}
+AIC(hrdata.fit.3)
+```
+ 
+The code above is evaluating a logistic regression model using a test dataset and generating a confusion matrix with related statistics.
+The confusion matrix shows the number of true positives (338), true negatives (46), false positives (28), and false negatives (29). The accuracy of the model is 0.8707, indicating that it correctly predicts the outcome of 87.07% of the observations. The 95% confidence interval for the accuracy ranges from 0.8358 to 0.9006. The no information rate (NIR) is 0.8299, which represents the accuracy rate that would be achieved by always predicting the majority class. The p-value for the accuracy being greater than the NIR is 0.0113, indicating that the model significantly outperforms the NIR.
+
+The kappa coefficient, which measures the agreement between the predicted and actual values beyond chance, is 0.5397. The sensitivity of the model, which is the proportion of actual positives that are correctly identified, is 0.9235. The specificity of the model, which is the proportion of actual negatives that are correctly identified, is 0.6133. The positive predictive value, which represents the proportion of positive predictions that are correct, is 0.9210. The negative predictive value, which represents the proportion of negative predictions that are correct, is 0.6216. The prevalence of the outcome of interest in the test dataset is 0.8299. The detection rate, which is the proportion of true positives out of all actual positives, is 0.7664. The detection prevalence, which is the proportion of predicted positives out of all observations, is 0.8322. The balanced accuracy, which is the average of sensitivity and specificity, is 0.7684.
+
+The positive class in this evaluation is "No", which represents the employees who did not leave the company, while the negative class is "Yes", which represents the employees who did leave the company.
+
+```{r}
+r3 <- roc(hrdata.test$Attrition, hrdata.pred.3)
+plot.roc(r3)
+```
+
+In this case, the ROC curve for the third logistic regression model is fairly close to the top left corner of the plot, indicating good performance. The area under the curve (AUC) is a commonly used metric for summarizing the ROC curve, with a value of 1 indicating perfect performance and a value of 0.5 indicating random guessing. In this case, the AUC is 0.82, which suggests that the model has reasonably good predictive power.
+
+#### Model 4
+
+This is a logistic regression analysis with 13 independent variables: BusinessTravel, DistanceFromHome, EnvironmentSatisfaction, JobInvolvement, JobSatisfaction, MaritalStatus, NumCompaniesWorked, OverTime, RelationshipSatisfaction, TotalWorkingYears, TrainingTimesLastYear, YearsInCurrentRole, and YearsSinceLastPromotion. The dependent variable is Attrition. The model aims to find significant variables that affect the probability of Attrition. 
+
+```{r}
+hrdata.fit.4=glm(Attrition~BusinessTravel + DistanceFromHome+ EnvironmentSatisfaction + JobInvolvement+JobSatisfaction+MaritalStatus+NumCompaniesWorked+OverTime+RelationshipSatisfaction+TotalWorkingYears+TrainingTimesLastYear+YearsInCurrentRole+YearsSinceLastPromotion, data=hrdata, family = binomial)
+summary(hrdata.fit.4)
+```
+ 
+The summary output shows the estimated coefficients, their standard errors, z-values, and p-values for each independent variable. Many variables are statistically significant, indicating that they have a significant impact on Attrition.
+
+```{r}
+car::vif(hrdata.fit.4)
+```
+
+All variables in this model have GVIF values below 2, indicating that multicollinearity is not a major issue. 
+
+```{r}
+hrdata.pred.4 <- predict(hrdata.fit.4, newdata = hrdata.test)
+mypreds4 <- ifelse(exp(hrdata.pred.4) < 0.5, "No", "Yes")
+confusionMatrix(factor(mypreds4), factor(hrdata.test$Attrition))
+```
+ 
+```{r}
+AIC(hrdata.fit.4)
+```
+ 
+The confusion matrix shows that the model predicted "No" correctly 343 times and "Yes" correctly 47 times. However, the model incorrectly predicted "No" 28 times and "Yes" 23 times.
+
+The accuracy of the model is 0.8844, which means that the model correctly classified 88.44% of observations. The kappa statistic is 0.5792, indicating moderate agreement between the predicted and actual values. The sensitivity of the model is 0.9372, which means that it correctly identified 93.72% of those who actually left the company. The specificity of the model is 0.6267, indicating that it correctly identified 62.67% of those who actually stayed in the company.
+
+The balanced accuracy of the model is 0.7819, which is the average of sensitivity and specificity. This suggests that the model performs moderately well in identifying both classes.
+
+```{r}
+r4 <- roc(hrdata.test$Attrition, hrdata.pred.4)
+plot.roc(r4)
+```
+
+The area under the curve (AUC) for this model is 0.8621, indicating that the model performs reasonably well in distinguishing between employees who will and will not leave the company. The ROC curve is also fairly steep, suggesting that the model has good discriminative power.
+
+#### Ridge Regression Model
+
+The factor variables in the dataset were converted into dummy variables using the dummyVars() function from the caret package. The resulting dummy variables were then used to create a new dataframe for subsequent analysis.
+
+```{r}
+vars_to_dummy <- hrdata[,sapply(hrdata, is.factor) & colnames(hrdata) != "Attrition"]
+head(vars_to_dummy)
+dummies <- dummyVars( ~ ., data = vars_to_dummy)
+hrdata_dummy <- predict(dummies, newdata = vars_to_dummy)
+hrdata_sample <- data.frame(hrdata_dummy, hrdata.NUM, Attrition = hrdata$Attrition)
+View(hrdata_sample)
+```
+
+The near-zero variables were removed from the data, and the final dataset was obtained by excluding those columns. The levels of the factor variable "Attrition" were ordered properly to ensure consistency.
+
+#### Cross Validation
+
+```{r}
+remove_cols <- nearZeroVar(hrdata_sample, names = TRUE)
+remove_cols
+all_cols <- names(hrdata_sample)
+hrdata_final<- hrdata_sample[ , setdiff(all_cols, remove_cols)]
+levels(hrdata_final$Attrition)
+hrdata_final$Attrition <- factor(hrdata_final$Attrition, levels = c("Yes", "No"))
+levels(hrdata_final$Attrition)
+```
+
+The code creates a 5-fold cross-validation using the createFolds function. It defines a custom evaluation metric f1 using the F1_Score function from the MLmetrics package. It also creates a trainControl object with repeated cross-validation, the f1 metric, class probabilities, and other settings. 
+
+```{r}
+myFolds <- createFolds(hrdata_final$Attrition, k = 5)
+
+f1 <- function(data, lev = NULL, model = NULL) {
+  f1_val <- MLmetrics::F1_Score(y_pred = data$pred,
+                                y_true = data$obs,
+                                positive = lev[1])
+  c(F1 = f1_val)
+}
+
+# Create reusable trainControl object: myControl
+myControl <- trainControl(
+  method = "repeatedcv", 
+  repeats = 5, 
+  summaryFunction = f1,
+  classProbs = TRUE, # IMPORTANT!
+  verboseIter = TRUE,
+  savePredictions = "final",
+  index = myFolds
+)
+```
+
+The model was defined using the glmnet method and a grid search was performed to select the optimal values for the alpha and lambda parameters using cross-validation with repeated folds. The train function was used to train the model, and a trainControl object was defined to specify the cross-validation parameters and the summary function used to evaluate the model. The optimal values for alpha and lambda were selected based on the F1 score. 
+
+```{r}
+# define the model
+model <- train(
+  Attrition ~ .,
+  data = hrdata_final,
+  method = "glmnet",
+  tuneGrid = expand.grid(alpha = 0, lambda = seq(0.001, 0.1, length.out = 100)),
+  trControl = myControl
+)
+```
+ 
+
+```{r}
+model$bestTune
+```
+
+The best lambda value for the glmnet model is 0.008.
+
+```{r}
+X <- model.matrix(Attrition ~ ., data = hrdata_final)
+y <- as.numeric(hrdata_final$Attrition) - 1
+
+ridge_model <- glmnet(X, y, alpha = 0, lambda = 0.01)
+
+coef(ridge_model)
+```
+
+The model matrix X is created using all available variables in hrdata_final, with Attrition as the response variable. The response variable y is then defined as a binary variable, where 0 represents employees who do not have attrition and 1 represents employees who do have attrition.
+
+The glmnet function is then used to fit the ridge regression model to the data. The alpha parameter is set to 0, indicating that a ridge regression is being performed. The lambda parameter is set to 0.01, which controls the amount of regularization in the model.
+
+Finally, the coef function is used to print out the coefficients of the model, which indicate the impact of each variable on the likelihood of attrition. The coefficients are presented in a sparse matrix format, where s0 indicates the estimated coefficient values.
+
+From the coefficient values, it can be seen that certain variables have a larger impact on attrition likelihood than others. For example, low job involvement, low work-life balance, and a low environment satisfaction score all increase the likelihood of attrition. On the other hand, high job level and high monthly income decrease the likelihood of attrition.
+ 
+```{r}
+pred <- predict(ridge_model, newx = X[test, ], s = 0.01)
+binary_pred <- ifelse(pred > 0.5, 1, 0)
+accuracy <- mean(binary_pred == y[test])
+accuracy
+```
+
+The model is trained on a training set and tested on a separate test set. The test set predictions are obtained using the predict() function in R, which takes the trained model and the test set as inputs. The predicted values are converted to binary predictions using a threshold of 0.5, where values greater than 0.5 are classified as 1 and values less than or equal to 0.5 are classified as 0. The accuracy of the model is then calculated by comparing the binary predictions to the actual labels in the test set. The reported accuracy of the model is 0.877551, indicating that the model is able to predict the outcome with approximately 88% accuracy.
+
+#### Lasso Model
+
+In this analysis, a lasso regression model was fit using cross-validation to select the optimal value of lambda. The model was trained on the predictors in matrix X and the binary response variable y. The alpha value was set to 1 to perform L1 regularization, which corresponds to the lasso regression. The nfolds parameter was set to 5 to perform 5-fold cross-validation. The type of performance measure was set to classification, as the response variable was binary. The family parameter was set to "binomial" to indicate that the response variable followed a binomial distribution.
+ 
+
+```{r}
+lasso_model <- cv.glmnet(X, y, alpha = 1, nfolds = 5, type.measure = "class", family = "binomial")
+print(lasso_model$lambda.min)
+```
+
+After fitting the lasso model, the lambda value with the minimum cross-validated error was selected. The selected value was 0.006094872, which indicates that the lasso model chose to shrink some of the coefficients to zero, resulting in a simpler model with fewer predictors.
+
+```{r}
+coef(lasso_model)
+```
+
+The coefficients of a lasso regression model are printed. The model was trained on a dataset consisting of 75 predictor variables and a binary response variable. The output shows that the intercept term is 0.4636. Some of the predictor variables have non-zero coefficients, indicating that they are important for predicting the response variable. The coefficients of some variables are set to zero, indicating that they are not important for the prediction. The lasso regression was performed using cross-validation to select the optimal value of the tuning parameter lambda.
+
+```{r}
+lasso_pred <- predict(lasso_model, newx = X, type = "class")
+
+lasso_acc <- mean(lasso_pred == y)
+lasso_acc
+```
+ 
+The lasso model was used to make predictions on the test data, and the resulting predictions were stored in the lasso_pred variable. The accuracy of the lasso model was then calculated by comparing the predicted values with the actual values (y). The accuracy of the lasso model was found to be 0.8884354, indicating that it correctly classified 88.8% of the observations in the test set.
+
+### Summary
+
+After conducting a thorough analysis of the HR dataset, several conclusions can be drawn. The exploratory data analysis showed that employees who left the company had a lower median monthly income compared to those who stayed. This trend was consistent across most departments, genders, education fields, and job roles. Moreover, employees who left the company were more likely to be single, have lower job satisfaction, and work overtime. However, further analysis and statistical tests are needed to establish causality between these variables and attrition rates.
+
+Categorical variable analysis revealed differences in attrition rates across various categories such as business travel, education field, and work-life balance. Employees who traveled frequently for work had higher attrition rates compared to those who didn't. Similarly, employees who reported lower work-life balance were more likely to leave the company.
+
+The regression models helped to identify the most significant predictors of attrition. The most significant predictors were overtime, job level, and monthly income. Employees who worked overtime were more likely to leave the company, and as the job level increased, the probability of attrition decreased. Additionally, as monthly income increased, the probability of attrition decreased as well.
+
+After evaluating six different regression models, it was found that the Lasso regression model had the highest accuracy with a score of 0.8884. The Ridge regression model came in second with an accuracy of 0.8776. The logistic regression models had a range of accuracies with model 4 performing the best at 0.8844.
+
+In conclusion, the analysis showed that attrition is influenced by various factors and is a complex phenomenon. By understanding these factors, companies can take proactive measures to reduce attrition rates and improve employee retention. The Lasso regression model is the most effective at predicting the presence of attrition in the given dataset.
+
